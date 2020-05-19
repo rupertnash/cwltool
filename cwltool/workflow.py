@@ -42,6 +42,7 @@ from .pathmapper import adjustDirObjs, get_listing
 from .process import Process, get_overrides, shortname, uniquename
 from .provenance import ProvenanceProfile
 from .stdfsaccess import StdFsAccess
+from .timing import exec_timing
 from .utils import DEFAULT_TMP_PREFIX, aslist
 
 WorkflowStateItem = namedtuple("WorkflowStateItem", ["parameter", "value", "success"])
@@ -262,8 +263,9 @@ class WorkflowJobStep(object):
 
         _logger.info("[%s] start", self.name)
 
-        for j in self.step.job(joborder, output_callback, runtimeContext):
-            yield j
+        with exec_timing(runtimeContext, self.name):
+            for j in self.step.job(joborder, output_callback, runtimeContext):
+                yield j
 
 
 class WorkflowJob(object):
@@ -776,14 +778,15 @@ class Workflow(Process):
                 runtimeContext.research_obj.create_job(builder.job, self.job)
 
         job = WorkflowJob(self, runtimeContext)
-        yield job
+        with exec_timing(runtimeContext, job.name):
+            yield job
 
-        runtimeContext = runtimeContext.copy()
-        runtimeContext.part_of = "workflow %s" % job.name
-        runtimeContext.toplevel = False
+            runtimeContext = runtimeContext.copy()
+            runtimeContext.part_of = "workflow %s" % job.name
+            runtimeContext.toplevel = False
 
-        for wjob in job.job(builder.job, output_callbacks, runtimeContext):
-            yield wjob
+            for wjob in job.job(builder.job, output_callbacks, runtimeContext):
+                yield wjob
 
     def visit(self, op: Callable[[MutableMapping[str, Any]], Any]) -> None:
         op(self.tool)

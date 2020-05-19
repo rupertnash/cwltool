@@ -609,6 +609,13 @@ def arg_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--timing-output",
+        type=str,
+        help="File to record execution timings to",
+        default=None
+    )
+
+    parser.add_argument(
         "workflow",
         type=str,
         nargs="?",

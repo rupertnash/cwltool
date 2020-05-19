@@ -64,6 +64,7 @@ from .process import (
 )
 from .singularity import SingularityCommandLineJob
 from .stdfsaccess import StdFsAccess
+from .timing import exec_timing
 from .utils import (
     aslist,
     convert_pathsep_to_unix,
@@ -513,7 +514,8 @@ class CommandLineTool(Process):
                     cachebuilder.outdir = jobcache
 
                 _logger.info("[job %s] Using cached output in %s", jobname, jobcache)
-                yield CallbackJob(self, output_callbacks, cachebuilder, jobcache)
+                with exec_timing(runtimeContext, jobname):
+                    yield CallbackJob(self, output_callbacks, cachebuilder, jobcache)
                 # we're done with the cache so release lock
                 jobcachelock.close()
                 return
@@ -783,8 +785,8 @@ class CommandLineTool(Process):
             readers=readers,
         )
         j.output_callback = output_callbacks
-
-        yield j
+        with exec_timing(runtimeContext, jobname):
+            yield j
 
     def collect_output_ports(
         self,

@@ -16,6 +16,7 @@ from .pathmapper import PathMapper
 from .secrets import SecretStore
 from .software_requirements import DependenciesConfiguration
 from .stdfsaccess import StdFsAccess
+from .timing import ExecutionTiming
 from .utils import DEFAULT_TMP_PREFIX
 
 if TYPE_CHECKING:
@@ -145,6 +146,7 @@ class RuntimeContext(ContextBase):
         self.cwl_full_name = ""  # type: str
         self.process_run_id = None  # type: Optional[str]
         self.prov_obj = None  # type: Optional[ProvenanceProfile]
+        self.exec_timing = None # type: Optional[ExecutionTiming]
         super(RuntimeContext, self).__init__(kwargs)
 
     def copy(self):

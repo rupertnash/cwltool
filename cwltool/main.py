@@ -80,6 +80,7 @@ from .software_requirements import (
 )
 from .stdfsaccess import StdFsAccess
 from .subgraph import get_subgraph
+from .timing import ExecutionTiming
 from .update import ALLUPDATES, UPDATES
 from .utils import (
     DEFAULT_TMP_PREFIX,
@@ -1039,6 +1040,9 @@ def main(
             runtimeContext.make_fs_access, StdFsAccess
         )
 
+        if args.timing_output is not None:
+            runtimeContext.exec_timing = ExecutionTiming()
+
         if not executor:
             if args.parallel:
                 temp_executor = MultithreadedJobExecutor()
@@ -1152,6 +1156,10 @@ def main(
                 stdout.write("\n")
                 if hasattr(stdout, "flush"):
                     stdout.flush()
+
+            if args.timing_output is not None:
+                if runtimeContext.exec_timing is not None:
+                    runtimeContext.exec_timing.write(args.timing_output)
 
             if status != "success":
                 _logger.warning("Final process status is %s", status)
