@@ -3,7 +3,8 @@ from io import StringIO
 import json
 import os
 from pathlib import Path
-from typing import Any
+from types import ModuleType
+from typing import Any, Optional
 
 import pytest
 
@@ -12,11 +13,11 @@ from cwltool.utils import onWindows
 
 from .util import get_data, get_main_output, needs_docker, working_directory
 
+deps = None # type: Optional[ModuleType]
 try:
-    from galaxy.tool_util import deps  # type: ignore
+    from galaxy.tool_util import deps
 except ImportError:
-    deps = None
-
+    pass
 
 @needs_docker
 @pytest.mark.skipif(not deps, reason="galaxy-lib is not installed")
