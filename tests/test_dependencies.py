@@ -46,9 +46,7 @@ def test_bioconda() -> None:
     not spawn.find_executable("modulecmd"), reason="modulecmd not installed"
 )
 def test_modules(monkeypatch: Any) -> None:
-    """Here we do a basic smoke test using environment modules to
-    satisfy a SoftwareRequirement.
-    """
+    """Do a basic smoke test using environment modules to satisfy a SoftwareRequirement."""
     wflow = get_data("tests/random_lines.cwl")
     job = get_data("tests/random_lines_job.json")
     monkeypatch.setenv(
@@ -72,9 +70,10 @@ def test_modules(monkeypatch: Any) -> None:
     not spawn.find_executable("modulecmd"), reason="modulecmd not installed"
 )
 def test_modules_environment(tmp_path: Path, monkeypatch: Any) -> None:
-    """Here check that the environment variables set by a module are
-    being propagated into a tool's environment, by running `env` as the
-    tool and parsing its output.
+    """
+    Check that the environment variables set by a module are being propagated correctly.
+
+    Do so by  by running `env` as the tool and parsing its output.
     """
     monkeypatch.setenv(
         "MODULEPATH", os.path.join(os.getcwd(), "tests/test_deps_env/modulefiles")
