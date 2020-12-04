@@ -13,7 +13,7 @@ from cwltool.utils import onWindows
 from .util import get_data, get_main_output, needs_docker, working_directory
 
 try:
-    from galaxy.tools import deps  # type: ignore
+    from galaxy.tool_util import deps  # type: ignore
 except ImportError:
     deps = None
 
@@ -40,6 +40,7 @@ def test_bioconda() -> None:
     assert error_code == 0, stderr
 
 
+@pytest.mark.skipif(not deps, reason="galaxy-lib is not installed")
 @pytest.mark.skipif(
     not spawn.find_executable("modulecmd"), reason="modulecmd not installed"
 )
@@ -65,6 +66,7 @@ def test_modules(monkeypatch: Any) -> None:
     assert error_code == 0, stderr
 
 
+@pytest.mark.skipif(not deps, reason="galaxy-lib is not installed")
 @pytest.mark.skipif(
     not spawn.find_executable("modulecmd"), reason="modulecmd not installed"
 )
