@@ -4,12 +4,6 @@ import os
 import subprocess
 import sys
 
-try:
-    from psutil.tests import TRAVIS  # type: ignore
-except ImportError:
-    TRAVIS = True
-
-
 from pathlib import Path
 
 import pytest
@@ -86,8 +80,8 @@ def test_udocker_usage_should_not_write_cid_file(udocker: str, tmp_path: Path) -
 
 
 @pytest.mark.skipif(
-    not LINUX or TRAVIS,
-    reason="Linux only & not reliable on single threaded test on Travis-CI.",
+    not LINUX,
+    reason="Linux only",
 )
 def test_udocker_should_display_memory_usage(udocker: str, tmp_path: Path) -> None:
     """Confirm that memory ussage is logged even with udocker."""
