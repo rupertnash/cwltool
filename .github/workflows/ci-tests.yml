@@ -26,6 +26,7 @@ jobs:
     env:
       py-semver: ${{ format('{0}.{1}', matrix.py-ver-major, matrix.py-ver-minor) }}
       TOXENV: ${{ format('py{0}{1}-{2}', matrix.py-ver-major, matrix.py-ver-minor, matrix.step) }}
+      CWLTOOL_TESTS_UDOCKER_DIR: ${{ github.workspace }}/.udocker
 
     steps:
       - uses: actions/checkout@v2
@@ -57,6 +58,18 @@ jobs:
         run: |
           pip install -U pip setuptools wheel
           pip install tox tox-gh-actions
+
+      - name: Cache udocker
+        id: cache-udocker
+        if: ${{ matrix.step == 'unit' || matrix.step == 'mypy' }}
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.CWLTOOL_TESTS_UDOCKER_DIR }}
+          key: udocker-${{ runner.os }}
+
+      - name: Pre-install udocker
+        if: ${{ (matrix.step == 'unit' || matrix.step == 'mypy') && steps.cache-udocker.outputs.cache-hit != 'true' }}
+        run: python -m tests.install_udocker ${{env.CWLTOOL_TESTS_UDOCKER_DIR}}
 
       - name: MyPy cache
         if: ${{ matrix.step == 'mypy' }}

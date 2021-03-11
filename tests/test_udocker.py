@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from _pytest.tmpdir import TempPathFactory
 
+from .install_udocker import install_udocker
 from .util import get_data, get_main_output
 
 LINUX = sys.platform in ("linux", "linux2")
@@ -17,40 +18,16 @@ LINUX = sys.platform in ("linux", "linux2")
 @pytest.fixture(scope="session")
 def udocker(tmp_path_factory: TempPathFactory) -> str:
     """Udocker fixture, returns the path to the udocker script."""
-    test_cwd = os.getcwd()
-    test_environ = copy.copy(os.environ)
+    try:
+        preinstalled_udocker = os.environ["CWLTOOL_TESTS_UDOCKER_DIR"]
+        exe = os.path.join(preinstalled_udocker, "udocker")
+        assert os.path.exists(exe)
+        return exe
+    except KeyError:
+        # Have to install ourselves
+        pass
     docker_install_dir = str(tmp_path_factory.mktemp("udocker"))
-    os.chdir(docker_install_dir)
-
-    url = "https://raw.githubusercontent.com/jorge-lip/udocker-builds/master/tarballs/udocker-1.1.4.tar.gz"
-    install_cmds = [
-        ["curl", url, "-o", "./udocker-tarball.tgz"],
-        ["tar", "xzvf", "udocker-tarball.tgz", "udocker"],
-        [
-            "bash",
-            "-c",
-            "UDOCKER_TARBALL={}/udocker-tarball.tgz ./udocker install".format(
-                docker_install_dir
-            ),
-        ],
-    ]
-
-    os.environ["UDOCKER_DIR"] = os.path.join(docker_install_dir, ".udocker")
-    os.environ["HOME"] = docker_install_dir
-
-    results = []
-    for _ in range(3):
-        results = [subprocess.call(cmds) for cmds in install_cmds]
-        if sum(results) == 0:
-            break
-        subprocess.call(["rm", "./udocker"])
-
-    assert sum(results) == 0
-
-    udocker_path = os.path.join(docker_install_dir, "udocker")
-    os.chdir(test_cwd)
-    os.environ = test_environ
-    return udocker_path
+    return install_udocker(docker_install_dir)
 
 
 @pytest.mark.skipif(not LINUX, reason="LINUX only")
@@ -93,8 +70,6 @@ def test_udocker_should_display_memory_usage(udocker: str, tmp_path: Path) -> No
             "--default-container=debian",
             "--user-space-docker-cmd=" + udocker,
             get_data("tests/wf/timelimit.cwl"),
-            "--sleep_time",
-            "10",
         ]
     )
     os.chdir(cwd)
