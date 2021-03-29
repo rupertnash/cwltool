@@ -303,20 +303,20 @@ enviroment variables for tools, in addition to the standard
 ``EnvVarRequirement``. The sequence of steps applied to create the
 enviroment is:
 
-0. If ``--preserve-entire-environment`` is set, begin with the current
+0. If the ``--preserve-entire-environment`` flag is present, then begin with the current
    environment, else begin with an empty environment.
 
 1. Add any variables specified by ``--preserve-environment`` option(s).
 
-2. Set ``TMPDIR`` and ``HOME`` per the CWL specification.
+2. Set ``TMPDIR`` and ``HOME`` per `the CWL v1.0+ CommandLineTool specification <https://www.commonwl.org/v1.0/CommandLineTool.html#Runtime_environment>`_.
 
-3. Apply ``EnvVarRequirement`` from tool description.
+3. Apply any ``EnvVarRequirement`` from the ``CommandLineTool`` description.
 
-4. Apply any manipulations required by ``MPIRequirement`` extension.
+4. Apply any manipulations required by any ``cwltool:MPIRequirement`` extensions.
 
 5. Substitute any secrets required by ``Secrets`` extension.
 
-6. Modify the environment in response to ``SoftwareRequirement``.
+6. Modify the environment in response to ``SoftwareRequirement`` (see below).
 
 
 Leveraging SoftwareRequirements (Beta)
