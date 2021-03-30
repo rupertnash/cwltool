@@ -1,9 +1,10 @@
 import contextlib
 import io
+import json
 import os
 import shutil
 from pathlib import Path
-from typing import Generator, List, Mapping, Optional, Tuple, Union
+from typing import Dict, Generator, List, Mapping, Optional, Tuple, Union
 
 import pytest
 from pkg_resources import Requirement, ResolutionError, resource_filename
@@ -52,16 +53,33 @@ needs_singularity_3_or_newer = pytest.mark.skipif(
 
 def get_main_output(
     args: List[str],
-    env: Union[
-        Mapping[bytes, Union[bytes, str]], Mapping[str, Union[bytes, str]], None
-    ] = None,
+    replacement_env: Optional[Mapping[str, str]] = None,
+    extra_env: Optional[Mapping[str, str]] = None,
     monkeypatch: Optional[pytest.MonkeyPatch] = None,
 ) -> Tuple[Optional[int], str, str]:
+    """Run cwltool main.
+
+    args: the command line args to call it with
+
+    replacement_env: a total replacement of the environment
+
+    extra_env: add these to the environment used
+
+    monkeypatch: required if changing the environment
+
+    Returns (return code, stdout, stderr)
+    """
     stdout = io.StringIO()
     stderr = io.StringIO()
-    if env is not None:
+    if replacement_env is not None:
         assert monkeypatch is not None
-        monkeypatch.setattr(os, "environ", env)
+        monkeypatch.setattr(os, "environ", replacement_env)
+
+    if extra_env is not None:
+        assert monkeypatch is not None
+        for k, v in extra_env.items():
+            monkeypatch.setenv(k, v)
+
     try:
         rc = main(argsl=args, stdout=stdout, stderr=stderr)
     except SystemExit as e:
@@ -71,6 +89,39 @@ def get_main_output(
         stdout.getvalue(),
         stderr.getvalue(),
     )
+
+
+def get_tool_env(
+    tmp_path: Path,
+    flag_args: List[str],
+    inputs_file: Optional[str] = None,
+    replacement_env: Optional[Mapping[str, str]] = None,
+    extra_env: Optional[Mapping[str, str]] = None,
+    monkeypatch: Optional[pytest.MonkeyPatch] = None,
+) -> Dict[str, str]:
+    """Get the env vars for a tool's invocation."""
+    args = flag_args + [get_data("tests/env3.cwl")]
+    if inputs_file:
+        args.append(inputs_file)
+
+    with working_directory(tmp_path):
+        rc, stdout, _ = get_main_output(
+            args,
+            replacement_env=replacement_env,
+            extra_env=extra_env,
+            monkeypatch=monkeypatch,
+        )
+        assert rc == 0
+
+        output = json.loads(stdout)
+        env_path = output["env"]["path"]
+        tool_env = {}
+        with open(env_path) as _:
+            for line in _:
+                key, val = line.split("=", 1)
+                tool_env[key] = val[:-1]
+
+        return tool_env
 
 
 @contextlib.contextmanager
