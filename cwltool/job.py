@@ -564,6 +564,8 @@ CONTROL_CODE_RE = r"\x1b\[[0-9;]*[a-zA-Z]"
 class ContainerCommandLineJob(JobBase, metaclass=ABCMeta):
     """Commandline job using containers."""
 
+    CONTAINER_TMPDIR: str = "/tmp"  # nosec
+
     @abstractmethod
     def get_from_requirements(
         self,

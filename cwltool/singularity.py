@@ -83,8 +83,6 @@ def _normalize_sif_id(string: str) -> str:
 
 
 class SingularityCommandLineJob(ContainerCommandLineJob):
-    CONTAINER_TMPDIR: str = "/tmp"  # nosec
-
     def __init__(
         self,
         builder: Builder,
