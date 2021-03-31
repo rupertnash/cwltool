@@ -1,4 +1,4 @@
-"""Test passing of environment variables to tools"""
+"""Test passing of environment variables to tools."""
 from abc import ABC, abstractmethod
 import os
 from pathlib import Path
@@ -17,6 +17,7 @@ EnvChecks = Dict[str, CheckerTypes]
 
 
 def assert_envvar_matches(check: CheckerTypes, k: str, v: str) -> None:
+    """Assert that the check is satisfied by the key-value."""
     if check is None:
         pass
     elif isinstance(check, str):
@@ -28,6 +29,11 @@ def assert_envvar_matches(check: CheckerTypes, k: str, v: str) -> None:
 def assert_env_matches(
     checks: EnvChecks, env: Mapping[str, str], allow_unexpected: bool = False
 ) -> None:
+    """Assert that all checks are satisfied by the Mapping.
+
+    Optional flag `allow_unexpected` (default = False) will allow the
+    Mapping to contain extra keys which are not checked.
+    """
     e = dict(env)
     for k, check in checks.items():
         v = e.pop(k)
@@ -40,13 +46,12 @@ def assert_env_matches(
 
 
 class CheckHolder(ABC):
+    """Base class for check factory functions and other data required to parametrize the tests below."""
+
     @staticmethod
     @abstractmethod
     def checks(tmp_prefix: str) -> EnvChecks:
-        """Return a mapping from environment variable names to how to
-
-        check for correctness.
-        """
+        """Return a mapping from environment variable names to how to check for correctness."""
         pass
 
     # Any flags to pass to cwltool to force use of the correct container
@@ -55,8 +60,11 @@ class CheckHolder(ABC):
 
 
 class NoContainer(CheckHolder):
+    """No containers at all, just run in the host."""
+
     @staticmethod
     def checks(tmp_prefix: str) -> EnvChecks:
+        """Create checks."""
         return {
             "TMPDIR": lambda v: v.startswith(tmp_prefix),
             "HOME": lambda v: v.startswith(tmp_prefix),
@@ -67,8 +75,12 @@ class NoContainer(CheckHolder):
 
 
 class Docker(CheckHolder):
+    """Run in a Docker container."""
+
     @staticmethod
     def checks(tmp_prefix: str) -> EnvChecks:
+        """Create checks."""
+
         def HOME(v: str) -> bool:
             # Want /whatever
             parts = os.path.split(v)
@@ -85,8 +97,11 @@ class Docker(CheckHolder):
 
 
 class Singularity(CheckHolder):
+    """Run in a Singularity container."""
+
     @staticmethod
     def checks(tmp_prefix: str) -> EnvChecks:
+        """Create checks."""
         return {
             "HOME": None,
             "LANG": "C",
@@ -117,6 +132,7 @@ CRT_PARAMS = pytest.mark.parametrize(
 
 @CRT_PARAMS
 def test_basic(crt_params: CheckHolder, tmp_path: Path, monkeypatch: Any) -> None:
+    """Test that basic env vars (only) show up."""
     tmp_prefix = str(tmp_path / "canary")
     extra_env = {
         "USEDVAR": "VARVAL",
@@ -132,6 +148,7 @@ def test_basic(crt_params: CheckHolder, tmp_path: Path, monkeypatch: Any) -> Non
 def test_preserve_single(
     crt_params: CheckHolder, tmp_path: Path, monkeypatch: Any
 ) -> None:
+    """Test that preserving a single env var works."""
     tmp_prefix = str(tmp_path / "canary")
     extra_env = {
         "USEDVAR": "VARVAL",
@@ -151,6 +168,7 @@ def test_preserve_single(
 def test_preserve_all(
     crt_params: CheckHolder, tmp_path: Path, monkeypatch: Any
 ) -> None:
+    """Test that preserving all works."""
     tmp_prefix = str(tmp_path / "canary")
     extra_env = {
         "USEDVAR": "VARVAL",
