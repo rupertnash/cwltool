@@ -393,12 +393,16 @@ class SingularityCommandLineJob(ContainerCommandLineJob):
             runtime.append("--userns")
         else:
             runtime.append("--pid")
+
+        container_HOME: Optional[str] = None
         if is_version_3_1_or_newer():
+            # Remove HOME, as passed in a special way (restore it below)
+            container_HOME = self.environment.pop("HOME")
             runtime.append("--home")
             runtime.append(
                 "{}:{}".format(
                     os.path.realpath(self.outdir),
-                    self.builder.outdir,
+                    container_HOME,
                 )
             )
         else:
@@ -445,4 +449,8 @@ class SingularityCommandLineJob(ContainerCommandLineJob):
 
         for name, value in self.environment.items():
             env[f"SINGULARITYENV_{name}"] = str(value)
+
+        if container_HOME:
+            # Restore HOME if we removed it above.
+            self.environment["HOME"] = container_HOME
         return (runtime, None)

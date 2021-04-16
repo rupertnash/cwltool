@@ -1,14 +1,18 @@
 import contextlib
+import functools
 import io
 import json
 import os
 import shutil
+import subprocess
 from pathlib import Path
+import sys
 from typing import Dict, Generator, List, Mapping, Optional, Tuple, Union
 
 import pytest
 from pkg_resources import Requirement, ResolutionError, resource_filename
 
+from cwltool.env_to_stdout import deserialize_env
 from cwltool.main import main
 from cwltool.singularity import is_version_2_6, is_version_3_or_newer
 
@@ -49,6 +53,23 @@ needs_singularity_3_or_newer = pytest.mark.skipif(
     (not bool(shutil.which("singularity"))) or (not is_version_3_or_newer()),
     reason="Requires that version 3.x of singularity executable version is on the system path.",
 )
+
+_env_accepts_null: Optional[bool] = None
+
+
+def env_accepts_null() -> bool:
+    """Return True iff the env command on this host accepts `-0`."""
+    global _env_accepts_null
+    if _env_accepts_null is None:
+        result = subprocess.run(
+            ["env", "-0"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+        )
+        _env_accepts_null = result.returncode == 0
+
+    return _env_accepts_null
 
 
 def get_main_output(
@@ -98,10 +119,24 @@ def get_tool_env(
     replacement_env: Optional[Mapping[str, str]] = None,
     extra_env: Optional[Mapping[str, str]] = None,
     monkeypatch: Optional[pytest.MonkeyPatch] = None,
+    runtime_env_accepts_null: Optional[bool] = None,
 ) -> Dict[str, str]:
     """Get the env vars for a tool's invocation."""
-    args = flag_args + [get_data("tests/env3.cwl")]
-    if inputs_file:
+    # GNU env accepts the -0 option to end each variable's
+    # printing with "\0". No such luck on BSD-ish.
+    #
+    # runtime_env_accepts_null is None => figure it out, otherwise
+    # use wrapped bool (because containers).
+    if runtime_env_accepts_null is None:
+        runtime_env_accepts_null = env_accepts_null()
+
+    args = flag_args.copy()
+    if runtime_env_accepts_null:
+        args.append(get_data("tests/env3.cwl"))
+    else:
+        args.append(get_data("tests/env4.cwl"))
+
+    if inputs_file is not None:
         args.append(inputs_file)
 
     with working_directory(tmp_path):
@@ -114,14 +149,8 @@ def get_tool_env(
         assert rc == 0
 
         output = json.loads(stdout)
-        env_path = output["env"]["path"]
-        tool_env = {}
-        with open(env_path) as _:
-            for line in _:
-                key, val = line.split("=", 1)
-                tool_env[key] = val[:-1]
-
-        return tool_env
+        with open(output["env"]["path"]) as _:
+            return deserialize_env(_.read())
 
 
 @contextlib.contextmanager

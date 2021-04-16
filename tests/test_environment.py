@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, Iterator, List, Mapping, Set, Union, cas
 
 import pytest
 
-from .util import get_tool_env, needs_docker, needs_singularity
+from .util import env_accepts_null, get_tool_env, needs_docker, needs_singularity
 
 # None => accept anything, just require the key is present
 # str => string equality
@@ -40,9 +40,14 @@ def assert_env_matches(
         assert_envvar_matches(check, k, v)
 
     if not allow_unexpected:
-        assert (
-            len(e) == 0
-        ), f"Unexpected environment variable(s): {', '.join(env.keys())}"
+        # If we have to use env4.cwl, there may be unwanted variables
+        # (see cwltool.env_to_stdout docstrings).
+        # LC_CTYPE if platform has glibc
+        # __CF_USER_TEXT_ENCODING on macOS
+        if not env_accepts_null():
+            e.pop("LC_CTYPE", None)
+            e.pop("__CF_USER_TEXT_ENCODING", None)
+        assert len(e) == 0, f"Unexpected environment variable(s): {', '.join(e.keys())}"
 
 
 class CheckHolder(ABC):
@@ -56,6 +61,10 @@ class CheckHolder(ABC):
 
     # Any flags to pass to cwltool to force use of the correct container
     flags: List[str]
+
+    # Does the env tool (maybe in our container) accept a `-0` flag?
+    env_accepts_null: bool
+
     pass
 
 
@@ -72,6 +81,7 @@ class NoContainer(CheckHolder):
         }
 
     flags = ["--no-container"]
+    env_accepts_null = env_accepts_null()
 
 
 class Docker(CheckHolder):
@@ -94,6 +104,7 @@ class Docker(CheckHolder):
         }
 
     flags = ["--default-container=debian"]
+    env_accepts_null = True
 
 
 class Singularity(CheckHolder):
@@ -108,15 +119,20 @@ class Singularity(CheckHolder):
             "LD_LIBRARY_PATH": None,
             "PATH": None,
             "PROMPT_COMMAND": None,
+            "PS1": None,
             "PWD": None,
+            "SINGULARITY_BIND": lambda v: v.startswith(tmp_prefix)
+            and v.endswith(":/tmp:rw"),
             "SINGULARITY_COMMAND": "exec",
             "SINGULARITY_CONTAINER": None,
             "SINGULARITY_ENVIRONMENT": None,
             "SINGULARITY_NAME": None,
             "TERM": None,
+            "TMPDIR": "/tmp",
         }
 
     flags = ["--default-container=debian", "--singularity"]
+    env_accepts_null = True
 
 
 # CRT = container runtime
@@ -139,7 +155,13 @@ def test_basic(crt_params: CheckHolder, tmp_path: Path, monkeypatch: Any) -> Non
         "UNUSEDVAR": "VARVAL",
     }
     args = crt_params.flags + [f"--tmpdir-prefix={tmp_prefix}"]
-    env = get_tool_env(tmp_path, args, extra_env=extra_env, monkeypatch=monkeypatch)
+    env = get_tool_env(
+        tmp_path,
+        args,
+        extra_env=extra_env,
+        monkeypatch=monkeypatch,
+        runtime_env_accepts_null=crt_params.env_accepts_null,
+    )
     checks = crt_params.checks(tmp_prefix)
     assert_env_matches(checks, env)
 
@@ -158,7 +180,13 @@ def test_preserve_single(
         f"--tmpdir-prefix={tmp_prefix}",
         "--preserve-environment=USEDVAR",
     ]
-    env = get_tool_env(tmp_path, args, extra_env=extra_env, monkeypatch=monkeypatch)
+    env = get_tool_env(
+        tmp_path,
+        args,
+        extra_env=extra_env,
+        monkeypatch=monkeypatch,
+        runtime_env_accepts_null=crt_params.env_accepts_null,
+    )
     checks = crt_params.checks(tmp_prefix)
     checks["USEDVAR"] = extra_env["USEDVAR"]
     assert_env_matches(checks, env)
@@ -178,13 +206,24 @@ def test_preserve_all(
         f"--tmpdir-prefix={tmp_prefix}",
         "--preserve-entire-environment",
     ]
-    env = get_tool_env(tmp_path, args, extra_env=extra_env, monkeypatch=monkeypatch)
+    env = get_tool_env(
+        tmp_path,
+        args,
+        extra_env=extra_env,
+        monkeypatch=monkeypatch,
+        runtime_env_accepts_null=crt_params.env_accepts_null,
+    )
     checks = crt_params.checks(tmp_prefix)
-    checks["USEDVAR"] = extra_env["USEDVAR"]
-    checks.pop("PATH")
+    checks.update(extra_env)
 
     for vname, val in env.items():
         try:
             assert_envvar_matches(checks[vname], vname, val)
         except KeyError:
+            assert val == os.environ[vname]
+        except AssertionError:
+            if vname == "HOME" or vname == "TMPDIR":
+                # These MUST be OK
+                raise
+            # Other variables can be overriden
             assert val == os.environ[vname]
