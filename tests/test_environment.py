@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Iterator, List, Mapping, Set, Union, cas
 
 import pytest
 
+from cwltool.singularity import get_version
 from .util import env_accepts_null, get_tool_env, needs_docker, needs_singularity
 
 # None => accept anything, just require the key is present
@@ -113,7 +114,7 @@ class Singularity(CheckHolder):
     @staticmethod
     def checks(tmp_prefix: str) -> EnvChecks:
         """Create checks."""
-        return {
+        base: EnvChecks = {
             "HOME": None,
             "LANG": "C",
             "LD_LIBRARY_PATH": None,
@@ -121,15 +122,31 @@ class Singularity(CheckHolder):
             "PROMPT_COMMAND": None,
             "PS1": None,
             "PWD": None,
-            "SINGULARITY_BIND": lambda v: v.startswith(tmp_prefix)
-            and v.endswith(":/tmp:rw"),
-            "SINGULARITY_COMMAND": "exec",
-            "SINGULARITY_CONTAINER": None,
-            "SINGULARITY_ENVIRONMENT": None,
-            "SINGULARITY_NAME": None,
             "TERM": None,
             "TMPDIR": "/tmp",
         }
+        # Singularity variables appear to be in flux somewhat.
+        version = get_version().split(".")
+        vmajor = int(version[0])
+        assert vmajor == 3, "Tests only work for Singularity 3"
+        vminor = int(version[1])
+        sing_vars: EnvChecks = {
+            "SINGULARITY_CONTAINER": None,
+            "SINGULARITY_NAME": None,
+        }
+        if vminor < 6:
+            sing_vars["SINGULARITY_INIT"] = "1"
+        else:
+            sing_vars["SINGULARITY_COMMAND"] = "exec"
+            if vminor >= 7:
+
+                def _(v: str) -> bool:
+                    return v.startswith(tmp_prefix) and v.endswith(":/tmp:rw")
+
+                sing_vars["SINGULARITY_BIND"] = _
+
+        base.update(sing_vars)
+        return base
 
     flags = ["--default-container=debian", "--singularity"]
     env_accepts_null = True
