@@ -132,6 +132,7 @@ class Singularity(CheckHolder):
         vminor = int(version[1])
         sing_vars: EnvChecks = {
             "SINGULARITY_CONTAINER": None,
+            "SINGULARITY_ENVIRONMENT": None,
             "SINGULARITY_NAME": None,
         }
         if vminor < 6:
@@ -141,7 +142,7 @@ class Singularity(CheckHolder):
             if vminor >= 7:
 
                 def _(v: str) -> bool:
-                    return v.startswith(tmp_prefix) and v.endswith(":/tmp:rw")
+                    return v.startswith(tmp_prefix) and v.endswith(":/tmp")
 
                 sing_vars["SINGULARITY_BIND"] = _
 

@@ -275,13 +275,12 @@ class SingularityCommandLineJob(ContainerCommandLineJob):
         runtime: List[str], source: str, target: str, writable: bool = False
     ) -> None:
         runtime.append("--bind")
-        runtime.append(
-            "{}:{}:{}".format(
-                source,
-                target,
-                "rw" if writable else "ro",
-            )
-        )
+        # Mounts are writable by default, so 'rw' is optional and not
+        # supported (due to a bug) in some 3.6 series releases.
+        vol = f"{source}:{target}"
+        if not writable:
+            vol += ":ro"
+        runtime.append(vol)
 
     def add_file_or_directory_volume(
         self, runtime: List[str], volume: MapperEnt, host_outdir_tgt: Optional[str]
@@ -406,19 +405,12 @@ class SingularityCommandLineJob(ContainerCommandLineJob):
                 )
             )
         else:
-            runtime.append("--bind")
-            runtime.append(
-                "{}:{}:rw".format(
-                    os.path.realpath(self.outdir),
-                    self.builder.outdir,
-                )
+            self.append_volume(
+                runtime, os.path.realpath(self.outdir), self.environment["HOME"], writable=True
             )
-        runtime.append("--bind")
-        runtime.append(
-            "{}:{}:rw".format(
-                os.path.realpath(self.tmpdir),
-                self.CONTAINER_TMPDIR,
-            )
+
+        self.append_volume(
+            runtime, os.path.realpath(self.tmpdir), self.CONTAINER_TMPDIR, writable=True
         )
 
         self.add_volumes(
