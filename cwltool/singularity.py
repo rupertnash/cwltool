@@ -406,7 +406,10 @@ class SingularityCommandLineJob(ContainerCommandLineJob):
             )
         else:
             self.append_volume(
-                runtime, os.path.realpath(self.outdir), self.environment["HOME"], writable=True
+                runtime,
+                os.path.realpath(self.outdir),
+                self.environment["HOME"],
+                writable=True,
             )
 
         self.append_volume(

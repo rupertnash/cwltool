@@ -13,18 +13,21 @@ from .util import env_accepts_null, get_tool_env, needs_docker, needs_singularit
 # str => string equality
 # Callable => call the function with the value - True => OK, False => fail
 # TODO: maybe add regex?
-CheckerTypes = Union[None, str, Callable[[str], bool]]
+Env = Mapping[str, str]
+CheckerTypes = Union[None, str, Callable[[str, Env], bool]]
 EnvChecks = Dict[str, CheckerTypes]
 
 
-def assert_envvar_matches(check: CheckerTypes, k: str, v: str) -> None:
-    """Assert that the check is satisfied by the key-value."""
+def assert_envvar_matches(check: CheckerTypes, k: str, env: Mapping[str, str]) -> None:
+    """Assert that the check is satisfied by the key in the env."""
     if check is None:
         pass
-    elif isinstance(check, str):
-        assert v == check, f'Environment variable {k} != "{check}"'
     else:
-        assert check(v), f'Environment variable {k}="{v}" fails check'
+        v = env[k]
+        if isinstance(check, str):
+            assert v == check, f'Environment variable {k} == "{v}" != "{check}"'
+        else:
+            assert check(v, env), f'Environment variable {k}="{v}" fails check'
 
 
 def assert_env_matches(
@@ -38,7 +41,7 @@ def assert_env_matches(
     e = dict(env)
     for k, check in checks.items():
         v = e.pop(k)
-        assert_envvar_matches(check, k, v)
+        assert_envvar_matches(check, k, env)
 
     if not allow_unexpected:
         # If we have to use env4.cwl, there may be unwanted variables
@@ -76,8 +79,8 @@ class NoContainer(CheckHolder):
     def checks(tmp_prefix: str) -> EnvChecks:
         """Create checks."""
         return {
-            "TMPDIR": lambda v: v.startswith(tmp_prefix),
-            "HOME": lambda v: v.startswith(tmp_prefix),
+            "TMPDIR": lambda v, _: v.startswith(tmp_prefix),
+            "HOME": lambda v, _: v.startswith(tmp_prefix),
             "PATH": os.environ["PATH"],
         }
 
@@ -92,7 +95,7 @@ class Docker(CheckHolder):
     def checks(tmp_prefix: str) -> EnvChecks:
         """Create checks."""
 
-        def HOME(v: str) -> bool:
+        def HOME(v: str, env: Env) -> bool:
             # Want /whatever
             parts = os.path.split(v)
             return len(parts) == 2 and parts[0] == "/"
@@ -114,6 +117,10 @@ class Singularity(CheckHolder):
     @staticmethod
     def checks(tmp_prefix: str) -> EnvChecks:
         """Create checks."""
+
+        def PWD(v: str, env: Env) -> bool:
+            return v == env["HOME"]
+
         base: EnvChecks = {
             "HOME": None,
             "LANG": "C",
@@ -121,7 +128,7 @@ class Singularity(CheckHolder):
             "PATH": None,
             "PROMPT_COMMAND": None,
             "PS1": None,
-            "PWD": None,
+            "PWD": PWD,
             "TERM": None,
             "TMPDIR": "/tmp",
         }
@@ -141,10 +148,10 @@ class Singularity(CheckHolder):
             sing_vars["SINGULARITY_COMMAND"] = "exec"
             if vminor >= 7:
 
-                def _(v: str) -> bool:
+                def BIND(v: str, env: Env) -> bool:
                     return v.startswith(tmp_prefix) and v.endswith(":/tmp")
 
-                sing_vars["SINGULARITY_BIND"] = _
+                sing_vars["SINGULARITY_BIND"] = BIND
 
         base.update(sing_vars)
         return base
@@ -236,7 +243,7 @@ def test_preserve_all(
 
     for vname, val in env.items():
         try:
-            assert_envvar_matches(checks[vname], vname, val)
+            assert_envvar_matches(checks[vname], vname, env)
         except KeyError:
             assert val == os.environ[vname]
         except AssertionError:
