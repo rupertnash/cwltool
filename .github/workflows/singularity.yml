@@ -1,0 +1,42 @@
+name: Debug singularity
+
+on:
+  push:
+
+env:
+  singularity_version: 3.6.4
+
+jobs:
+  tox:
+    runs-on: ubuntu-20.04
+
+    strategy:
+      matrix:
+        singularity_version: [3.6.4]
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Singularity
+        uses: eWaterCycle/setup-singularity@v6
+        with:
+          singularity-version: ${{ matrix.singularity_version }}
+
+      - name: Pull
+        run: singularity pull debian.sif docker://debian
+
+      - name: Host env
+        run: env
+
+      - name: Container env
+        run: singularity -d exec --contain --ipc --cleanenv --userns debian.sif env
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7
+
+      - name: Py env
+        run: python -c 'import os; print("\n".join(f"{k}={v}" for k,v in os.environ.items()))'
